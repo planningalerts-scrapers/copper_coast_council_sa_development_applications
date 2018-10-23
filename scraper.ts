@@ -22,9 +22,10 @@ const CommentUrl = "mailto:info@coppercoast.sa.gov.au";
 
 declare const process: any;
 
-// All valid suburb names.
+// All valid street and suburb names.
 
 let SuburbNames = null;
+let StreetNames = null;
 
 // Sets up an sqlite database.
 
@@ -512,12 +513,21 @@ async function main() {
 
     let database = await initializeDatabase();
 
-    // Read the files containing all possible suburb names.
+    // Read the files containing all possible street and suburb names.
 
     SuburbNames = {};
     for (let suburb of fs.readFileSync("suburbnames.txt").toString().replace(/\r/g, "").trim().split("\n"))
         SuburbNames[suburb.split(",")[0]] = suburb.split(",")[1];
 
+    StreetNames = {};
+    for (let line of fs.readFileSync("streetnames.txt").toString().replace(/\r/g, "").trim().split("\n")) {
+        let streetName = line.split(",")[0];
+        let suburbName = line.split(",")[1];
+        if (StreetNames[streetName] === undefined)
+            StreetNames[streetName] = [];
+        StreetNames[streetName].push(suburbName);  // several suburbs may exist for the same street name
+    }
+    
     // Retrieve the page that contains the links to the PDFs.
 
     console.log(`Retrieving page: ${DevelopmentApplicationsUrl}`);

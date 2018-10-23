@@ -13,6 +13,7 @@ import * as urlparser from "url";
 import * as moment from "moment";
 import * as pdfjs from "pdfjs-dist";
 import * as didyoumean from "didyoumean2";
+import * as fs from "fs";
 
 sqlite3.verbose();
 
@@ -20,6 +21,10 @@ const DevelopmentApplicationsUrl = "http://www.coppercoast.sa.gov.au/page.aspx?u
 const CommentUrl = "mailto:info@coppercoast.sa.gov.au";
 
 declare const process: any;
+
+// All valid suburb names.
+
+let SuburbNames = null;
 
 // Sets up an sqlite database.
 
@@ -244,20 +249,22 @@ function parseApplicationElements(elements: Element[], startElement: Element, in
 
     // Get the received date.
 
-//    let receivedDateText = getRightText(elements, "Application received", "Planning Approval", "Building Application");
-//    if (receivedDateText === undefined)
-//        receivedDateText = getRightText(elements, "Application Received", "Planning Approval", "Building Application");
+    let receivedDateText = "";
+
+    if (elements.some(element => element.text.trim() == "Application Received"))
+        receivedDateText = getRightText(elements, "Application Received", "Planning Approval", "Land Division Approval");  
+    else if (elements.some(element => element.text.trim() == "Application received"))
+        receivedDateText = getRightText(elements, "Application received", "Planning Approval", "Building Application");  
+
     let receivedDate: moment.Moment = undefined;
     if (receivedDateText !== undefined)
         receivedDate = moment(receivedDateText.trim(), "D/MM/YYYY", true);
 
-    // Get the address.
-
-    let address = "";
+    // Get the house number, street and suburb of the address.
 
     let houseNumber = getRightText(elements, "Property House No", "Planning Conditions", "Lot");
-    if (houseNumber !== undefined && houseNumber !== "0")
-        address += houseNumber;
+    if (houseNumber === undefined || houseNumber === "0")
+        houseNumber = "";
 
     let streetName = getRightText(elements, "Property Street", "Planning Conditions", "Property Suburb");
     if (streetName === undefined || streetName === "" || streetName === "0") {
@@ -265,16 +272,67 @@ function parseApplicationElements(elements: Element[], startElement: Element, in
         console.log(`Application number ${applicationNumber} will be ignored because an address was not found or parsed (there is no street name).  Elements: ${elementSummary}`);
         return undefined;
     }
-    address += ((address === "") ? "" : " ") + streetName;
 
     let suburbName = getRightText(elements, "Property Suburb", "Planning Conditions", "Title");
-    if (suburbName === undefined || suburbName === "" || suburbName === "0")
-//        suburbName = "PORT LINCOLN SA 5606";
-    else
-        suburbName += " SA 5606";
+    if (suburbName === undefined || suburbName === "" || suburbName === "0") {
+        let elementSummary = elements.map(element => `[${element.text}]`).join("");
+        console.log(`Application number ${applicationNumber} will be ignored because an address was not found or parsed (there is no suburb name for street \"${streetName}\").  Elements: ${elementSummary}`);
+        return undefined;
+    }
 
-//    address += ((address === "") ? "" : ", ") + suburbName.replace(/ STAGE ONE/g, "").replace(/LINCOLN COVEüLINCO /g, "LINCOLN COVE ").replace(/PORT LINCOLNüPORT LINCOLN /g, "PORT LINCOLN ");
-    address = address.replace(/ü/g, " ").trim();
+    // Two addresses are sometimes recorded in the same field.  This is done in a way which is
+    // ambiguous (ie. it is not possible to reconstruct the original addresses perfectly).
+    //
+    // For example, the following address:
+    //
+    //     House Number: ü35
+    //           Street: RAILWAYüSCHOOL TCE SOUTHüTERRA
+    //           Suburb: PASKEVILLEüPASKEVILLE
+    //
+    // should be interpreted as the following two addresses:
+    //
+    //     RAILWAY TCE SOUTH, PASKEVILLE
+    //     35 SCHOOL TERRA(CE), PASKEVILLE
+    //
+    // whereas the following address:
+    //
+    //     House Number: 79ü4
+    //           Street: ROSSLYNüSWIFT WINGS ROADüROAD
+    //           Suburb: WALLAROOüWALLAROO
+    //
+    // should be interpreted as the following two addresses:
+    //
+    //     79 ROSSLYN ROAD, WALLAROO
+    //     4 SWIFT WINGS ROAD, WALLAROO
+    //
+    // And so notice the in the first case above the "TCE" text of the Street belonged to the
+    // first address.  Whereas in the second case above the "WINGS" text of the Street belonged
+    // to the second address (this was deduced by examining actual existing street names).
+
+    if (houseNumber.includes("ü")) {
+        let houseNumber1 = houseNumber.split("ü")[0];
+        let houseNumber2 = houseNumber.split("ü")[1];
+
+        let streetNameTokens = streetName.split(" ");
+        if (streetNameTokens.length === 1) {  // a street name without spaces probably never occurs
+            let streetName1 = suburbName.split("ü")[0];
+            let streetName2 = suburbName.split("ü")[1];
+        } else if (streetNameTokens.length === 2) {
+            let streetName1 = streetNameTokens[0].split("ü")[0] + " " + streetNameTokens[1].split("ü")[0];
+            let streetName2 = streetNameTokens[0].split("ü")[1] + " " + streetNameTokens[1].split("ü")[1];
+        } else if (streetNameTokens.length >= 3) {
+
+        }
+
+        let suburbName1 = suburbName.split("ü")[0];
+        let suburbName2 = suburbName.split("ü")[1];
+
+        console.log("Temporarily ignoring multiple addresses.");
+    }
+
+    let suburbNameAndPostCode = SuburbNames[suburbName.toUpperCase()] || suburbName;
+    let address = `${houseNumber} ${streetName}, ${suburbNameAndPostCode}`;
+    address = address.trim().replace(/\s\s+/g, " ");
 
     // Get the description.
 
@@ -453,6 +511,12 @@ async function main() {
     // Ensure that the database exists.
 
     let database = await initializeDatabase();
+
+    // Read the files containing all possible suburb names.
+
+    SuburbNames = {};
+    for (let suburb of fs.readFileSync("suburbnames.txt").toString().replace(/\r/g, "").trim().split("\n"))
+        SuburbNames[suburb.split(",")[0]] = suburb.split(",")[1];
 
     // Retrieve the page that contains the links to the PDFs.
 

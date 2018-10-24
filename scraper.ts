@@ -183,6 +183,8 @@ function getRightText(elements: Element[], topLeftText: string, rightText: strin
         if (elementArea > 0 && intersectingArea * 2 > elementArea && element.text !== ":")
             intersectingElements.push(element);
     }
+    if (intersectingElements.length === 0)
+        return undefined;
 
     // Sort the elements by Y co-ordinate and then by X co-ordinate.
 
@@ -224,6 +226,8 @@ function getDownText(elements: Element[], topText: string, rightText: string, bo
         if (elementArea > 0 && intersectingArea * 2 > elementArea && element.text !== ":")
             intersectingElements.push(element);
     }
+    if (intersectingElements.length === 0)
+        return undefined;
 
     // Sort the elements by Y co-ordinate and then by X co-ordinate.
 
@@ -251,11 +255,20 @@ function parseApplicationElements(elements: Element[], startElement: Element, in
     // Get the received date.
 
     let receivedDateText = "";
+if (applicationNumber === "340/491/14") {
+    console.log("here");
+}
 
-    if (elements.some(element => element.text.trim() == "Application Received"))
-        receivedDateText = getRightText(elements, "Application Received", "Planning Approval", "Land Division Approval");  
-    else if (elements.some(element => element.text.trim() == "Application received"))
+    if (elements.some(element => element.text.trim() == "Application Received")) {
+        receivedDateText = getRightText(elements, "Application Received", "Planning Approval", "Land Division Approval");
+        if (receivedDateText === undefined)
+            receivedDateText = getRightText(elements, "Application Date", "Planning Approval", "Application Received");
+    }
+    else if (elements.some(element => element.text.trim() == "Application received")) {
         receivedDateText = getRightText(elements, "Application received", "Planning Approval", "Building Application");  
+        if (receivedDateText === undefined)
+            receivedDateText = getRightText(elements, "Application Date", "Planning Approval", "Application received");  
+    }
 
     let receivedDate: moment.Moment = undefined;
     if (receivedDateText !== undefined)

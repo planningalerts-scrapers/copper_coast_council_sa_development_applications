@@ -310,29 +310,76 @@ function parseApplicationElements(elements: Element[], startElement: Element, in
     // first address.  Whereas in the second case above the "WINGS" text of the Street belonged
     // to the second address (this was deduced by examining actual existing street names).
 
+    let address = "";
+
     if (houseNumber.includes("ü")) {
+        // The house number always has at most one "ü" character.  So split on this character.
+
         let houseNumber1 = houseNumber.split("ü")[0];
         let houseNumber2 = houseNumber.split("ü")[1];
 
-        let streetNameTokens = streetName.split(" ");
-        if (streetNameTokens.length === 1) {  // a street name without spaces probably never occurs
-            let streetName1 = suburbName.split("ü")[0];
-            let streetName2 = suburbName.split("ü")[1];
-        } else if (streetNameTokens.length === 2) {
-            let streetName1 = streetNameTokens[0].split("ü")[0] + " " + streetNameTokens[1].split("ü")[0];
-            let streetName2 = streetNameTokens[0].split("ü")[1] + " " + streetNameTokens[1].split("ü")[1];
-        } else if (streetNameTokens.length >= 3) {
+        // The street name may have one or two "ü" characters.
 
+        let streetName1 = undefined;
+        let streetName2 = undefined;
+        let streetNameTokens = streetName.split("ü");
+        if (streetNameTokens.length === 2) {
+            // If there is one "ü" character in the street then simply split on this to determine
+            // the street names.  For example, "SMITH STREETüRAILWAY TERRACE" is simply split into
+            // "SMITH STREET" and "RAILWAY TERRACE".
+
+            streetName1 = streetNameTokens[0];
+            streetName2 = streetNameTokens[1];
+        } else if (streetNameTokens.length === 3) {
+            // If there are two "ü" characters then the splitting is more complicated if the
+            // middle token contains more than one space.
+
+            let streetName1Prefix = streetNameTokens[0];
+            let streetName2Suffix = streetNameTokens[2];
+            streetNameTokens = streetNameTokens[1].split(" ");
+            if (streetNameTokens.length === 2) {
+                // This is a simple case because the middle token contains only one space.  For
+                // example, "OLIVEüTUCKER PARADEüROAD" becomes "OLIVE PARADE" and "TUCKER ROAD".
+
+                streetName1 = streetName1Prefix + " " + streetNameTokens[1];
+                streetName2 = streetNameTokens[0] + " " + streetName2Suffix;
+            } else if (streetNameTokens.length === 3) {                
+                // This is a more complicated case because the middle token contains two spaces.
+                // For example, in "ROSSLYNüSWIFT WINGS ROADüSTREET" does "WINGS" belong with the
+                // first street or the second?  Either "ROSSLYN WINGS ROAD"/"SWIFT STREET" would
+                // result or "ROSSLYN ROAD"/"SWIFT WINGS STREET" would result.  Determining which
+                // is the reason for the "didyoumean" calls.
+
+                streetName1 = streetName1Prefix + " " + streetNameTokens[1] + " " + streetNameTokens[2];
+                streetName2 = streetNameTokens[0] + " " + streetName2Suffix;
+                let streetNameMatch1 = didyoumean(streetName1, Object.keys(StreetNames), { caseSensitive: false, returnType: "first-closest-match", thresholdType: "edit-distance", threshold: 2, trimSpace: true });
+                let streetNameMatch2 = didyoumean(streetName2, Object.keys(StreetNames), { caseSensitive: false, returnType: "first-closest-match", thresholdType: "edit-distance", threshold: 2, trimSpace: true });
+                if (streetNameMatch1 === null && streetNameMatch2 === null) {
+                    streetName1 = streetName1Prefix + " " + streetNameTokens[2];
+                    streetName2 = streetNameTokens[0] + " " + streetNameTokens[1] + " " + streetName2Suffix;
+                }
+            }
         }
 
-        let suburbName1 = suburbName.split("ü")[0];
-        let suburbName2 = suburbName.split("ü")[1];
+        // Remove the "hundred" prefix that appears in some addresses.
 
-        console.log("Temporarily ignoring multiple addresses.");
+        let suburbName1 = suburbName.split("ü")[0].replace(/^HD /, "");
+        let suburbName2 = suburbName.split("ü")[1].replace(/^HD /, "");
+
+        // There are typically two addresses (for example, delineating a corner block).  Prefer
+        // the address that has a house number.
+
+        if (/[0-9]+[a-zA-Z]?/.test(houseNumber1))
+            address = houseNumber1 + " " + streetName1 + ", " + (SuburbNames[suburbName1.toUpperCase()] || suburbName1);
+        else if (/[0-9]+[a-zA-Z]?/.test(houseNumber2))
+            address = houseNumber2 + " " + streetName2 + ", " + (SuburbNames[suburbName2.toUpperCase()] || suburbName2);
+        else
+            address = houseNumber1 + " " + streetName1 + ", " + (SuburbNames[suburbName1.toUpperCase()] || suburbName1);
+    } else {
+        suburbName = suburbName.replace(/^HD /, "");
+        address = `${houseNumber} ${streetName}, ${SuburbNames[suburbName.toUpperCase()] || suburbName}`;
     }
 
-    let suburbNameAndPostCode = SuburbNames[suburbName.toUpperCase()] || suburbName;
-    let address = `${houseNumber} ${streetName}, ${suburbNameAndPostCode}`;
     address = address.trim().replace(/\s\s+/g, " ");
 
     // Get the description.

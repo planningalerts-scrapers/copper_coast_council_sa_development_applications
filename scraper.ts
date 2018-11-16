@@ -255,9 +255,6 @@ function parseApplicationElements(elements: Element[], startElement: Element, in
     // Get the received date.
 
     let receivedDateText = "";
-if (applicationNumber === "340/491/14") {
-    console.log("here");
-}
 
     if (elements.some(element => element.text.trim() == "Application Received")) {
         receivedDateText = getRightText(elements, "Application Received", "Planning Approval", "Land Division Approval");

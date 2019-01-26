@@ -316,7 +316,7 @@ function parseApplicationElements(elements: Element[], startElement: Element, in
     //     79 ROSSLYN ROAD, WALLAROO
     //     4 SWIFT WINGS ROAD, WALLAROO
     //
-    // And so notice the in the first case above the "TCE" text of the Street belonged to the
+    // And so notice that in the first case above the "TCE" text of the Street belonged to the
     // first address.  Whereas in the second case above the "WINGS" text of the Street belonged
     // to the second address (this was deduced by examining actual existing street names).
 
